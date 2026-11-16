@@ -1,0 +1,19 @@
+# PlatformIO
+.pio/
+.piolibdeps/
+
+# Build
+build/
+Debug/
+Release/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.log
