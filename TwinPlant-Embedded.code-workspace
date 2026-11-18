@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{ "name": "F103", "path": "stm32/f103" },
+		{ "name": "F407", "path": "stm32/f407" },
+		{ "name": "ESP32-S3", "path": "esp32s3" },
+		{ "name": "repo", "path": "." }
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.pio": true
+		},
+		// 编辑哪个工程的文件，PlatformIO 就自动切换到哪个工程
+		"platformio-ide.activateProjectOnTextEditorChange": true
+	}
+}
