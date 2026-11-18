@@ -171,6 +171,11 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* HAL 参数检查失败时停在这里，调试器暂停后查看 file/line 即可定位 */
+  __disable_irq();
+  while (1)
+  {
+  }
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
