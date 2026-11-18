@@ -7,6 +7,9 @@ build/
 Debug/
 Release/
 
+# clangd / 编译数据库（含本机绝对路径）
+compile_commands.json
+
 # STM32CubeMX
 Backup/
 EWARM/

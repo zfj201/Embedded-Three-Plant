@@ -8,6 +8,8 @@
 	"settings": {
 		"files.exclude": {
 			"**/.pio": true
-		}
+		},
+		// 编辑哪个工程的文件，PlatformIO 就自动切换到哪个工程
+		"platformio-ide.activateProjectOnTextEditorChange": true
 	}
 }
