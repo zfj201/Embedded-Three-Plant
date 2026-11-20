@@ -1,21 +1,16 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include "network/wifi_manager.h"
 
 void setup() {
   Serial.begin(115200);
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  wifi_manager_init();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  Serial.println("Hello, World!");
-  delay(1000);
+  // Serial.println("Hello, World!");
+  // delay(1000);
+  wifi_manager_update();
 }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
