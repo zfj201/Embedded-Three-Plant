@@ -15,6 +15,7 @@ enum class MQTTState
     WAIT_RETRY
 };
 
+
 // ==================== 内部变量 ====================
 static WiFiClient wifiClient;
 static PubSubClient mqttClient(wifiClient);
@@ -32,6 +33,10 @@ static char gateway_id[24];
 // 完整 topic，init() 里用 mqtt_cfg 的格式串拼一次，之后一直用。
 static char topic_gw_status[mqtt_cfg::TOPIC_MAX_LEN];
 static char topic_gw_data[mqtt_cfg::TOPIC_MAX_LEN];
+// status 消息，init() 里拼一次。offline 是连接时交给 broker 的遗嘱，之后改不了，
+// 所以不带 timestamp、sequence 这类会随时间变旧的字段。
+static char payload_status_online[128];
+static char payload_status_offline[128];
 
 // ==================== 内部函数 ====================
 static void set_state(MQTTState new_state)
@@ -44,7 +49,8 @@ static bool try_connect()
 {
     Serial.println("MQTT connecting");
     const uint32_t t0 = millis();
-    bool success = mqttClient.connect(gateway_id);
+    // 连接的同时设立遗嘱消息。
+    bool success = mqttClient.connect(gateway_id,topic_gw_status,1,true,payload_status_offline);
     uint32_t take_time = millis() - t0;
     if (success)
     {
@@ -111,6 +117,21 @@ void mqtt_manager_init(void)
         mqtt_cfg::TOPIC_PREFIX,
         gateway_id);
 
+    // 4. 生成 status 消息（online / offline）
+    snprintf(
+        payload_status_online,
+        sizeof(payload_status_online),
+        "{\"ver\":%u,\"gatewayId\":\"%s\",\"type\":\"status\",\"value\":\"online\"}",
+        (unsigned)mqtt_cfg::PROTOCOL_VERSION,
+        gateway_id);
+
+    snprintf(
+        payload_status_offline,
+        sizeof(payload_status_offline),
+        "{\"ver\":%u,\"gatewayId\":\"%s\",\"type\":\"status\",\"value\":\"offline\"}",
+        (unsigned)mqtt_cfg::PROTOCOL_VERSION,
+        gateway_id);
+
     // 初始化 MQTT Client
     mqttClient.setServer(mqtt_cfg::BROKER_HOST, mqtt_cfg::BROKER_PORT);
     mqttClient.setKeepAlive(mqtt_cfg::KEEPALIVE_S);
@@ -139,8 +160,17 @@ void mqtt_manager_update(void)
         if (success)
         {
             set_state(MQTTState::CONNECTED);
-            backoff_time = mqtt_cfg::RECONNECT_BACKOFF_INIT_MS;
-            retry_wait_time = 0;
+            // 发送上线消息。
+            mqtt_result_t publish_res = mqtt_publish(topic_gw_status, payload_status_online, true);
+            if(publish_res != MQTT_RESULT_OK) {
+                Serial.println("Warn! MQTT online message published falied");
+                schedule_retry();
+            }
+            else
+            {
+                backoff_time = mqtt_cfg::RECONNECT_BACKOFF_INIT_MS;
+                retry_wait_time = 0;
+            }
         }
         else
         {
@@ -178,5 +208,64 @@ void mqtt_manager_update(void)
 
 bool mqtt_manager_is_connected(void)
 {
-    return current_state == MQTTState::CONNECTED;
+    // 不能只用current state来判断，因为有可能状态机没来得及切换，但实际已经断开连接了。
+    return current_state == MQTTState::CONNECTED && mqttClient.connected();
+}
+
+mqtt_result_t mqtt_publish(const char* topic, const char* payload, bool retained)
+{
+    // 1. 检查连接状态
+    if (current_state != MQTTState::CONNECTED ||
+        !mqttClient.connected()) {
+
+        return MQTT_RESULT_NOT_CONNECTED;
+    }
+
+    // 2. 检查参数
+    if (topic == nullptr || payload == nullptr ||
+        topic[0] == '\0') {
+
+        return MQTT_RESULT_PUBLISH_FAILED;
+    }
+
+    // 3. 计算 Topic 和 Payload 长度
+    const size_t topic_len = strlen(topic);
+    const size_t payload_len = strlen(payload);
+
+    // MQTT 最大固定报头预留 5 字节
+    constexpr size_t HEADER_SIZE = 5;
+    constexpr size_t TOPIC_LENGTH_SIZE = 2;
+
+    const size_t required_size =
+        HEADER_SIZE +
+        TOPIC_LENGTH_SIZE +
+        topic_len +
+        payload_len;
+
+    // 4. 检查缓冲区容量
+    if (required_size > mqtt_cfg::BUFFER_SIZE) {
+        return MQTT_RESULT_PAYLOAD_TOO_LARGE;
+    }
+
+    // 5. 执行发布
+    const bool success = mqttClient.publish(
+        topic,
+        payload,
+        retained
+    );
+
+    if (success) {
+        return MQTT_RESULT_OK;
+    }
+
+    return MQTT_RESULT_PUBLISH_FAILED;
+}
+
+const char* mqtt_get_data_topic()
+{
+    return topic_gw_data;
+}
+const char* mqtt_get_gateway_id()
+{
+    return gateway_id;
 }
