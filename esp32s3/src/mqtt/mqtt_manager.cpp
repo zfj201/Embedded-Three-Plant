@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "mqtt_manager.h"
+#include "mqtt_handler.h"
 #include "../config/mqtt_config.h"
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -33,6 +34,7 @@ static char gateway_id[24];
 // 完整 topic，init() 里用 mqtt_cfg 的格式串拼一次，之后一直用。
 static char topic_gw_status[mqtt_cfg::TOPIC_MAX_LEN];
 static char topic_gw_data[mqtt_cfg::TOPIC_MAX_LEN];
+static char topic_dev_ctrl_sub[mqtt_cfg::TOPIC_MAX_LEN];
 // status 消息，init() 里拼一次。offline 是连接时交给 broker 的遗嘱，之后改不了，
 // 所以不带 timestamp、sequence 这类会随时间变旧的字段。
 static char payload_status_online[128];
@@ -117,6 +119,13 @@ void mqtt_manager_init(void)
         mqtt_cfg::TOPIC_PREFIX,
         gateway_id);
 
+    snprintf(
+        topic_dev_ctrl_sub,
+        sizeof(topic_dev_ctrl_sub),
+        mqtt_cfg::TOPIC_DEV_CTRL_REQ_FMT,
+        mqtt_cfg::TOPIC_PREFIX,
+        "+");
+
     // 4. 生成 status 消息（online / offline）
     snprintf(
         payload_status_online,
@@ -137,6 +146,7 @@ void mqtt_manager_init(void)
     mqttClient.setKeepAlive(mqtt_cfg::KEEPALIVE_S);
     mqttClient.setSocketTimeout(mqtt_cfg::SOCKET_TIMEOUT_S);
     mqttClient.setBufferSize(mqtt_cfg::BUFFER_SIZE);
+    mqttClient.setCallback(mqtt_handler_on_message);
 }
 
 void mqtt_manager_update(void)
@@ -163,13 +173,22 @@ void mqtt_manager_update(void)
             // 发送上线消息。
             mqtt_result_t publish_res = mqtt_publish(topic_gw_status, payload_status_online, true);
             if(publish_res != MQTT_RESULT_OK) {
-                Serial.println("Warn! MQTT online message published falied");
+                Serial.println("Warn! MQTT online message published failed");
                 schedule_retry();
             }
             else
             {
-                backoff_time = mqtt_cfg::RECONNECT_BACKOFF_INIT_MS;
-                retry_wait_time = 0;
+                bool is_subscribed = mqttClient.subscribe(topic_dev_ctrl_sub, 1);
+                if(is_subscribed)
+                {
+                    backoff_time = mqtt_cfg::RECONNECT_BACKOFF_INIT_MS;
+                    retry_wait_time = 0;
+                }
+                else {
+                    Serial.println("Warn! MQTT topic subscribe failed");
+                    schedule_retry();
+                }
+                
             }
         }
         else

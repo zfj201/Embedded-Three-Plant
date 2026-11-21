@@ -44,6 +44,11 @@ constexpr const char* TOPIC_GW_STATUS_FMT = "%s/gw/%s/status";  // 网关在线/
 constexpr const char* TOPIC_GW_DATA_FMT = "%s/gw/%s/data";      // 网关自己的数据（运行时间、剩余堆）
 constexpr const char* TOPIC_DEV_DATA_FMT = "%s/dev/%s/data";    // 设备数据，接上 UART 后才有
 
+// 控制请求：前端发布，网关订阅。订阅时第二个 %s 填 "+"，匹配所有设备：
+//   订阅 twin-plant-zfj/dev/+/ctrl/req，收到的 topic 里那一段就是 deviceId。
+// 目前网关只打印，不执行。公共 broker 没有鉴权，接继电器之前必须先解决谁能发的问题。
+constexpr const char* TOPIC_DEV_CTRL_REQ_FMT = "%s/dev/%s/ctrl/req";
+
 // 拼接后的 topic 缓冲区大小（含结尾 \0）。
 constexpr uint8_t TOPIC_MAX_LEN = 96;
 
